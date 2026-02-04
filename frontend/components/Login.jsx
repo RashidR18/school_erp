@@ -142,7 +142,7 @@ const styles = {
         borderRadius: 6,
         border: "none",
         background: "#2563eb",
-        color: "#fff",
+        color: "#0a0a0a",
         fontSize: 15,
         cursor: "pointer",
         opacity: 1,
