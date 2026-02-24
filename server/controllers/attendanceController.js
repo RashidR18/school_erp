@@ -1,15 +1,21 @@
 const Attendance = require("../models/Attendance");
-const Student = require("../models/Student");
+const { getAuthorizedChildForParent } = require("../utils/parentAccess");
 
 // TEACHER: mark attendance
 exports.markAttendance = async (req, res) => {
   const { studentId, date, status } = req.body;
 
-  const record = await Attendance.create({
-    studentId,
-    date,
-    status,
-  });
+  const parsedDate = new Date(date);
+  if (Number.isNaN(parsedDate.getTime())) {
+    return res.status(400).json({ message: "Invalid date" });
+  }
+  parsedDate.setHours(0, 0, 0, 0);
+
+  const record = await Attendance.findOneAndUpdate(
+    { studentId, date: parsedDate },
+    { $set: { status }, $setOnInsert: { studentId, date: parsedDate } },
+    { upsert: true, new: true },
+  );
 
   res.json(record);
 };
@@ -25,10 +31,7 @@ exports.getAttendanceByStudent = async (req, res) => {
 
 // PARENT: view own child attendance
 exports.getMyChildAttendance = async (req, res) => {
-  const student = await Student.findOne({
-    _id: req.params.studentId,
-    parentId: req.user.id,
-  });
+  const student = await getAuthorizedChildForParent(req.user.id, req.params.studentId);
 
   if (!student) return res.sendStatus(403);
 

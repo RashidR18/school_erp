@@ -8,7 +8,7 @@ const {
 } = require("../controllers/feeController");
 
 router.post("/", auth(["admin"]), setFee);
-router.get("/:studentId", auth(["admin"]), getFeeByStudent);
 router.get("/parent/:studentId", auth(["parent"]), getMyChildFee);
+router.get("/:studentId", auth(["admin", "teacher"]), getFeeByStudent);
 
 module.exports = router;

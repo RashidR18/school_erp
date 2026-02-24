@@ -1,54 +1,97 @@
 import { useState } from "react";
+import { motion } from "framer-motion";
 
-function Login(){
-  const [email,setEmail]=useState("");
-  const [password,setPassword]=useState("");
+import { useNavigate } from "react-router-dom";
+import API from "../../services/api";
+import loginSchoolImage from "../../assets/login-school.jpg";
 
-  const handleLogin=(e)=>{
+const Login = () => {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState(null); // Add error state
+  const navigate = useNavigate();
+
+  const handleLogin = async (e) => {
     e.preventDefault();
+    setError(null); // Clear previous errors
+    try {
+      const res = await API.post("/auth/login", {
+        email,
+        password,
+      });
 
-    if(email==="admin@gmail.com" && password==="123456"){
-      localStorage.setItem("token","demo");
-      window.location="/dashboard";
-    }else{
-      alert("Invalid credentials");
+      localStorage.setItem("token", res.data.token);
+      localStorage.setItem("role", String(res.data.role || "").toLowerCase());
+      navigate("/dashboard");
+    } catch (err) {
+      const serverError = err?.response?.data;
+      setError(
+        typeof serverError === "string"
+          ? serverError
+          : serverError?.message || "Invalid login credentials.",
+      );
+      console.log(err);
     }
-  }
+  };
+
 
   return(
-    <div className="flex items-center justify-center h-screen bg-gradient-to-br from-blue-900 to-black">
+    <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-blue-300 via-cyan-200 to-emerald-200 px-4">
 
-      <form 
+      <motion.form 
+      initial={{ opacity: 0, y: 24 }}
+      animate={{ opacity: 1, y: 0 }}
       onSubmit={handleLogin}
-      className="bg-white/10 backdrop-blur-xl p-10 rounded-2xl w-96 shadow-2xl">
+      className="bg-white/70 backdrop-blur-xl p-6 md:p-10 rounded-2xl w-full max-w-md shadow-2xl border border-white/70">
 
-        <h1 className="text-3xl font-bold text-center mb-6">
-          School ERP Login
+        <div className="flex justify-center mb-3">
+          <span className="inline-flex items-center justify-center px-3 py-1 rounded-full bg-blue-600 text-white text-xs font-bold">
+            MEHS
+          </span>
+        </div>
+        <h1 className="text-2xl md:text-3xl font-bold text-center mb-1 text-slate-900">
+          Marina School ERP
         </h1>
+        <p className="text-center text-sm text-slate-600 mb-5">Login</p>
+
+        <img
+          src={loginSchoolImage}
+          alt="School campus"
+          className="w-full h-28 object-cover rounded-xl mb-4 border border-white/60"
+        />
 
         <input
         type="email"
         placeholder="Email"
-        className="w-full p-3 mb-4 rounded bg-white/20 outline-none"
+        className="w-full p-3 mb-4 rounded bg-white/90 outline-none text-slate-800 placeholder:text-slate-400 border border-slate-200"
+        value={email}
         onChange={(e)=>setEmail(e.target.value)}
         />
 
         <input
         type="password"
         placeholder="Password"
-        className="w-full p-3 mb-6 rounded bg-white/20 outline-none"
+        className="w-full p-3 mb-6 rounded bg-white/90 outline-none text-slate-800 placeholder:text-slate-400 border border-slate-200"
+        value={password}
         onChange={(e)=>setPassword(e.target.value)}
         />
 
-        <button className="w-full bg-blue-600 p-3 rounded-lg hover:bg-blue-700 font-semibold">
+        {error && <p className="text-red-400 text-center mb-4">{error}</p>} {/* Display error message */}
+
+        <button type="submit" className="w-full bg-blue-600 p-3 rounded-lg hover:bg-blue-700 font-semibold text-white">
           Login
         </button>
 
-        <p className="text-sm mt-4 text-center text-gray-300">
-          demo: admin@gmail.com / 123456
-        </p>
+        <a
+          href="https://marinaenglishhighschool.com/facilities/"
+          target="_blank"
+          rel="noreferrer"
+          className="block mt-4 text-center text-sm text-blue-700 hover:text-blue-800 underline underline-offset-2"
+        >
+          Visit Marina English High School Website
+        </a>
 
-      </form>
+      </motion.form>
     </div>
   )
 }

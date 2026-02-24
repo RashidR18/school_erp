@@ -1,186 +1,187 @@
 import { useEffect, useState } from "react";
-import DashboardLayout from "../../layout/DashboardLayout";
+import { motion } from "framer-motion";
 import API from "../../services/api";
+import DashboardLayout from "../../layout/DashboardLayout";
 
-function Teachers() {
+const Teachers = () => {
   const [teachers, setTeachers] = useState([]);
-  const [loading, setLoading] = useState(false);
+  const [teacherForm, setTeacherForm] = useState({
+    name: "",
+    email: "",
+    password: "",
+    number: "",
+  });
+  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState(null);
-  const [message, setMessage] = useState(null);
+  const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
 
-  const [showForm, setShowForm] = useState(false);
-  const [editing, setEditing] = useState(null);
-  const [form, setForm] = useState({ name: "", email: "", subjects: [] });
-
-  const allSubjects = ["Math", "Science", "English", "History", "Geography", "Computer"];
+  const fetchTeachers = async () => {
+    try {
+      setLoading(true);
+      const res = await API.get("/auth/users", {
+        params: { role: "teacher" },
+      });
+      setTeachers(Array.isArray(res.data) ? res.data : []);
+    } catch (err) {
+      setError(err?.response?.data?.message || "Failed to fetch teachers");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
     fetchTeachers();
   }, []);
 
-  async function fetchTeachers() {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await API.get("/teachers");
-      const data = res?.data || [];
-      // normalize
-      const list = (Array.isArray(data) ? data : []).map((t) => ({
-        id: t._id ?? t.id ?? t.teacherId,
-        name: t.name,
-        email: t.email,
-        subjects: Array.isArray(t.subjects) ? t.subjects : t.subject ? [t.subject] : [],
-      }));
-      setTeachers(list);
-    } catch (err) {
-      // fallback sample
-      setTeachers([
-        { id: "t-1", name: "Ankit Sir", email: "ankit@gmail.com", subjects: ["Math"] },
-        { id: "t-2", name: "Neha Maam", email: "neha@gmail.com", subjects: ["Science"] },
-      ]);
-      setError(null);
-    } finally {
-      setLoading(false);
-    }
-  }
+  const onTeacherChange = (e) =>
+    setTeacherForm((f) => ({ ...f, [e.target.name]: e.target.value }));
 
-  function openAdd() {
-    setEditing(null);
-    setForm({ name: "", email: "", subjects: [] });
-    setShowForm(true);
-    setMessage(null);
-  }
-
-  function openEdit(t) {
-    setEditing(t);
-    setForm({ name: t.name || "", email: t.email || "", subjects: t.subjects || [] });
-    setShowForm(true);
-    setMessage(null);
-  }
-
-  function toggleSubject(sub) {
-    setForm((f) => {
-      const exists = (f.subjects || []).includes(sub);
-      return { ...f, subjects: exists ? f.subjects.filter((s) => s !== sub) : [...(f.subjects || []), sub] };
-    });
-  }
-
-  async function handleSave(e) {
-    e && e.preventDefault();
+  const createTeacher = async (e) => {
+    e.preventDefault();
     setSaving(true);
-    setError(null);
+    setError("");
+    setMessage("");
     try {
-      const payload = { name: form.name, email: form.email, subjects: form.subjects };
-      if (editing?.id) {
-        await API.put(`/teachers/${editing.id}`, payload);
-        setTeachers((prev) => prev.map((t) => (t.id === editing.id ? { ...t, ...payload } : t)));
-        setMessage("Teacher updated");
-      } else {
-        const res = await API.post(`/teachers`, payload);
-        const created = res?.data || { ...payload, id: res?.data?._id ?? Date.now().toString() };
-        setTeachers((prev) => [ { id: created._id ?? created.id ?? created.id, ...payload }, ...prev ]);
-        setMessage("Teacher added");
-      }
-      setShowForm(false);
+      await API.post("/auth/register", {
+        ...teacherForm,
+        role: "teacher",
+      });
+      setMessage("Teacher account created successfully.");
+      setTeacherForm({
+        name: "",
+        email: "",
+        password: "",
+        number: "",
+      });
+      fetchTeachers();
     } catch (err) {
-      setError(err?.response?.data?.message || err.message || "Save failed");
+      setError(err?.response?.data?.message || "Failed to create teacher");
     } finally {
       setSaving(false);
     }
-  }
-
-  async function handleDelete(id) {
-    if (!confirm("Delete this teacher?")) return;
-    setError(null);
-    try {
-      await API.delete(`/teachers/${id}`);
-      setTeachers((prev) => prev.filter((t) => t.id !== id));
-      setMessage("Teacher deleted");
-    } catch (err) {
-      setError(err?.response?.data?.message || err.message || "Delete failed");
-    }
-  }
+  };
 
   return (
     <DashboardLayout>
-      <div className="max-w-6xl mx-auto py-6">
-        <div className="flex justify-between items-center mb-6">
-          <h1 className="text-2xl font-semibold">Teachers</h1>
-          <div className="flex items-center gap-3">
-            <button onClick={openAdd} className="bg-blue-600 text-white px-4 py-2 rounded">+ Add Teacher</button>
-          </div>
-        </div>
+      <div className="max-w-6xl mx-auto py-4 md:py-6">
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.35 }}
+          className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm mb-4"
+        >
+          <h1 className="text-2xl font-semibold text-slate-900">Teachers</h1>
+          <p className="mt-1 text-sm text-slate-600">
+            Create and manage teacher accounts from the admin panel.
+          </p>
+        </motion.div>
 
-        <div className="bg-white rounded shadow p-4">
-          {message && <div className="mb-3 text-green-600">{message}</div>}
-          {error && <div className="mb-3 text-red-600">{error}</div>}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <motion.form
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.05, duration: 0.35 }}
+            onSubmit={createTeacher}
+            className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"
+          >
+            <h2 className="text-lg font-semibold text-slate-900">
+              Create Teacher
+            </h2>
 
-          {showForm && (
-            <form onSubmit={handleSave} className="mb-4 p-3 border rounded bg-gray-50">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                <input placeholder="Name" value={form.name} onChange={(e)=>setForm(f=>({...f,name:e.target.value}))} className="border px-2 py-2 rounded" required />
-                <input placeholder="Email" type="email" value={form.email} onChange={(e)=>setForm(f=>({...f,email:e.target.value}))} className="border px-2 py-2 rounded" required />
-                <div className="flex items-center gap-2">
-                  <button type="submit" disabled={saving} className="bg-green-600 text-white px-3 py-2 rounded">{saving?"Saving...":"Save"}</button>
-                  <button type="button" onClick={()=>setShowForm(false)} className="px-3 py-2 border rounded">Cancel</button>
-                </div>
-              </div>
+            {error && (
+              <p className="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
+                {error}
+              </p>
+            )}
+            {message && (
+              <p className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
+                {message}
+              </p>
+            )}
 
-              <div className="mt-3">
-                <div className="text-sm font-medium mb-1">Subjects</div>
-                <div className="flex flex-wrap gap-2">
-                  {allSubjects.map((s)=>{
-                    const checked = form.subjects.includes(s);
-                    return (
-                      <label key={s} className={`px-2 py-1 border rounded cursor-pointer ${checked?"bg-blue-100 border-blue-400":"bg-white"}`}>
-                        <input type="checkbox" checked={checked} onChange={()=>toggleSubject(s)} className="mr-2" />
-                        {s}
-                      </label>
-                    )
-                  })}
-                </div>
-              </div>
-            </form>
-          )}
-
-          {loading ? (
-            <div className="py-12 text-center text-gray-500">Loading teachers...</div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left">
-                <thead>
-                  <tr className="text-sm text-gray-600 border-b">
-                    <th className="py-2">#</th>
-                    <th className="py-2">Name</th>
-                    <th className="py-2">Email</th>
-                    <th className="py-2">Subjects</th>
-                    <th className="py-2">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {teachers.map((t, idx) => (
-                    <tr key={t.id} className="border-b">
-                      <td className="py-3">{idx + 1}</td>
-                      <td className="py-3">{t.name}</td>
-                      <td className="py-3">{t.email}</td>
-                      <td className="py-3">{(t.subjects || []).join(", ")}</td>
-                      <td className="py-3">
-                        <div className="flex gap-2">
-                          <button onClick={()=>openEdit(t)} className="px-3 py-1 border rounded">Edit</button>
-                          <button onClick={()=>handleDelete(t.id)} className="px-3 py-1 bg-red-600 text-white rounded">Delete</button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              <input
+                name="name"
+                placeholder="Full name"
+                value={teacherForm.name}
+                onChange={onTeacherChange}
+                required
+                className="rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-cyan-500"
+              />
+              <input
+                name="email"
+                type="email"
+                placeholder="Email"
+                value={teacherForm.email}
+                onChange={onTeacherChange}
+                required
+                className="rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-cyan-500"
+              />
+              <input
+                name="number"
+                placeholder="Phone number"
+                value={teacherForm.number}
+                onChange={onTeacherChange}
+                className="rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-cyan-500"
+              />
+              <input
+                name="password"
+                type="password"
+                placeholder="Password"
+                value={teacherForm.password}
+                onChange={onTeacherChange}
+                required
+                className="rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-cyan-500"
+              />
             </div>
-          )}
+
+            <button
+              type="submit"
+              disabled={saving}
+              className="mt-4 rounded-lg bg-cyan-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-cyan-700 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {saving ? "Creating..." : "Create Teacher"}
+            </button>
+          </motion.form>
+
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.1, duration: 0.35 }}
+            className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"
+          >
+            <h2 className="text-lg font-semibold text-slate-900">
+              Registered Teachers
+            </h2>
+            <p className="mt-1 text-sm text-slate-600">
+              Teachers added by the school administration.
+            </p>
+
+            <div className="mt-4 space-y-2">
+              {loading ? (
+                <p className="text-sm text-slate-500">Loading teachers...</p>
+              ) : teachers.length === 0 ? (
+                <p className="text-sm text-slate-500">No teachers found.</p>
+              ) : (
+                teachers.map((teacher) => (
+                  <div
+                    key={teacher._id}
+                    className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2"
+                  >
+                    <p className="text-sm font-medium text-slate-900">
+                      {teacher.name}
+                    </p>
+                    <p className="text-xs text-slate-600">{teacher.email}</p>
+                  </div>
+                ))
+              )}
+            </div>
+          </motion.div>
         </div>
       </div>
     </DashboardLayout>
   );
-}
+};
 
 export default Teachers;

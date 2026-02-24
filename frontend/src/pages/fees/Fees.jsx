@@ -3,77 +3,164 @@ import DashboardLayout from "../../layout/DashboardLayout";
 import API from "../../services/api";
 
 function Fees() {
+  const role = localStorage.getItem("role");
+  const isParent = role === "parent";
+  const canEditFees = role === "admin";
   const [klass, setKlass] = useState("1");
-  const [section, setSection] = useState("A");
+  const [division, setDivision] = useState("A");
+  const [selectedStudent, setSelectedStudent] = useState("");
   const [loading, setLoading] = useState(false);
   const [savingId, setSavingId] = useState(null);
   const [error, setError] = useState(null);
+  const [message, setMessage] = useState(null);
   const [students, setStudents] = useState([]);
-  const [payments, setPayments] = useState({});
+  const [parentChildren, setParentChildren] = useState([]);
+  const [forms, setForms] = useState({});
 
   const classes = Array.from({ length: 12 }, (_, i) => String(i + 1));
-  const sections = ["A", "B", "C"];
+  const divisions = ["A", "B", "C"];
 
   useEffect(() => {
+    if (isParent) {
+      fetchParentFees();
+      return;
+    }
     fetchFees();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [klass, section]);
+  }, [isParent, klass, division, selectedStudent]);
 
-  async function fetchFees() {
+  async function fetchParentFees() {
     setLoading(true);
     setError(null);
+    setMessage(null);
     try {
-      // expected server endpoint: GET /fees?class=1&section=A
-      const res = await API.get("/fees", { params: { class: klass, section } });
-      const data = res?.data?.students || res?.data || [];
-      if (!Array.isArray(data) || data.length === 0) throw new Error("No data");
-      const normalized = data.map((s) => ({
-        id: s._id ?? s.id ?? s.studentId ?? s.roll ?? `${s.roll}`,
-        name: s.name || s.fullName || `Student ${s.roll ?? ""}`,
-        roll: s.roll ?? s.rollNo ?? "-",
-        total: Number(s.totalFees ?? s.total ?? 0),
-        paid: Number(s.paid ?? s.paidAmount ?? 0),
-      }));
-      setStudents(normalized);
-      const map = {};
-      normalized.forEach((n) => (map[n.id] = ""));
-      setPayments(map);
+      const meRes = await API.get("/auth/me");
+      const linked = Array.isArray(meRes.data?.linkedStudentIds)
+        ? meRes.data.linkedStudentIds
+        : [];
+      setParentChildren(linked);
+      const currentStudentId = selectedStudent || linked[0]?._id || "";
+      setSelectedStudent(currentStudentId);
+      if (!currentStudentId) {
+        setStudents([]);
+        setParentChildren([]);
+        setForms({});
+        return;
+      }
+
+      const student = linked.find((s) => s._id === currentStudentId);
+      const feeRes = await API.get(`/fees/parent/${currentStudentId}`);
+      const fee = feeRes?.data || {};
+      const row = {
+        id: currentStudentId,
+        name: student?.name || "Student",
+        rollNo: student?.rollNo || "-",
+        totalAmount: Number(fee.totalAmount || 0),
+        paidAmount: Number(fee.paidAmount || 0),
+        status: fee.status || "unpaid",
+      };
+      setStudents([row]);
+      setForms({
+        [row.id]: {
+          totalAmount: String(row.totalAmount),
+          paidAmount: String(row.paidAmount),
+          status: row.status,
+        },
+      });
     } catch (err) {
-      // fallback sample data
-      const sample = Array.from({ length: 8 }, (_, i) => ({
-        id: `s-${klass}-${section}-${i + 1}`,
-        name: `Student ${i + 1}`,
-        roll: i + 1,
-        total: 10000,
-        paid: Math.floor(Math.random() * 8000),
-      }));
-      setStudents(sample);
-      const map = {};
-      sample.forEach((n) => (map[n.id] = ""));
-      setPayments(map);
-      setError(null);
+      setError(err?.response?.data?.message || err.message || "Failed to load fees");
+      setStudents([]);
+      setForms({});
     } finally {
       setLoading(false);
     }
   }
 
-  function pendingAmount(s) {
-    return Math.max(0, (s.total || 0) - (s.paid || 0));
+  async function fetchFees() {
+    setLoading(true);
+    setError(null);
+    setMessage(null);
+    try {
+      const studentsRes = await API.get("/students");
+      const allStudents = Array.isArray(studentsRes.data) ? studentsRes.data : [];
+      const filtered = allStudents.filter(
+        (s) => String(s.className || "") === klass && String(s.division || "") === division,
+      );
+
+      const rows = await Promise.all(
+        filtered.map(async (s) => {
+          try {
+            const feeRes = await API.get(`/fees/${s._id}`);
+            const fee = feeRes?.data || {};
+            return {
+              id: s._id,
+              name: s.name,
+              rollNo: s.rollNo,
+              totalAmount: Number(fee.totalAmount || 0),
+              paidAmount: Number(fee.paidAmount || 0),
+              status: fee.status || "unpaid",
+            };
+          } catch {
+            return {
+              id: s._id,
+              name: s.name,
+              rollNo: s.rollNo,
+              totalAmount: 0,
+              paidAmount: 0,
+              status: "unpaid",
+            };
+          }
+        }),
+      );
+
+      setStudents(rows);
+      const init = {};
+      rows.forEach((r) => {
+        init[r.id] = {
+          totalAmount: r.totalAmount ? String(r.totalAmount) : "",
+          paidAmount: r.paidAmount ? String(r.paidAmount) : "",
+          status: r.status || "unpaid",
+        };
+      });
+      setForms(init);
+    } catch (err) {
+      setError(err?.response?.data?.message || err.message || "Failed to load fees");
+      setStudents([]);
+    } finally {
+      setLoading(false);
+    }
   }
 
-  async function handlePay(id) {
-    const raw = payments[id];
-    const amt = Number(raw || 0);
-    if (!amt || amt <= 0) return setError("Enter a valid amount to pay");
-    setSavingId(id);
+  async function handleSave(studentId) {
+    if (!canEditFees) return;
+
+    const form = forms[studentId] || {};
+    const totalAmount = Number(form.totalAmount || 0);
+    const paidAmount = Number(form.paidAmount || 0);
+    const status = form.status || "unpaid";
+
+    if (totalAmount < 0 || paidAmount < 0) {
+      setError("Amounts cannot be negative.");
+      return;
+    }
+
+    setSavingId(studentId);
     setError(null);
+    setMessage(null);
     try {
-      // expected endpoint: POST /fees/pay { studentId, amount }
-      await API.post("/fees/pay", { studentId: id, amount: amt });
-      setStudents((prev) => prev.map((s) => (s.id === id ? { ...s, paid: Number(s.paid || 0) + amt } : s)));
-      setPayments((p) => ({ ...p, [id]: "" }));
+      await API.post("/fees", {
+        studentId,
+        totalAmount,
+        paidAmount,
+        status,
+      });
+      setStudents((prev) =>
+        prev.map((s) =>
+          s.id === studentId ? { ...s, totalAmount, paidAmount, status } : s,
+        ),
+      );
+      setMessage("Fee updated.");
     } catch (err) {
-      setError(err?.response?.data?.message || err.message || "Payment failed");
+      setError(err?.response?.data?.message || err.message || "Fee save failed");
     } finally {
       setSavingId(null);
     }
@@ -85,19 +172,40 @@ function Fees() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-semibold">Student Fees</h1>
-            <p className="text-sm text-gray-500">Overview of fees per student with quick payments</p>
+            <p className="text-sm text-gray-500">
+              {isParent ? "View your linked student fee details" : "Manage fees using backend fee routes"}
+            </p>
           </div>
           <div className="flex gap-3 items-center">
-            <select value={klass} onChange={(e) => setKlass(e.target.value)} className="border px-3 py-2 rounded">
-              {classes.map((c) => (
-                <option key={c} value={c}>{`Class ${c}`}</option>
-              ))}
-            </select>
-            <select value={section} onChange={(e) => setSection(e.target.value)} className="border px-3 py-2 rounded">
-              {sections.map((s) => (
-                <option key={s} value={s}>{s}</option>
-              ))}
-            </select>
+            {isParent ? (
+              <select
+                value={selectedStudent}
+                onChange={(e) => setSelectedStudent(e.target.value)}
+                className="border px-3 py-2 rounded"
+                disabled={loading}
+              >
+                {parentChildren.map((s) => (
+                  <option key={s._id} value={s._id}>
+                    {s.name} ({s.rollNo})
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <>
+                <select value={klass} onChange={(e) => setKlass(e.target.value)} className="border px-3 py-2 rounded">
+                  {classes.map((c) => (
+                    <option key={c} value={c}>{`Class ${c}`}</option>
+                  ))}
+                </select>
+                <select value={division} onChange={(e) => setDivision(e.target.value)} className="border px-3 py-2 rounded">
+                  {divisions.map((d) => (
+                    <option key={d} value={d}>
+                      {d}
+                    </option>
+                  ))}
+                </select>
+              </>
+            )}
           </div>
         </div>
 
@@ -111,48 +219,92 @@ function Fees() {
                   <tr className="text-sm text-gray-600 border-b">
                     <th className="py-2">#</th>
                     <th className="py-2">Name</th>
-                    <th className="py-2">Roll</th>
+                    <th className="py-2">Roll No</th>
                     <th className="py-2">Total</th>
                     <th className="py-2">Paid</th>
                     <th className="py-2">Pending</th>
-                    <th className="py-2">Pay</th>
+                    <th className="py-2">Status</th>
+                    {canEditFees && <th className="py-2">Action</th>}
                   </tr>
                 </thead>
                 <tbody>
-                  {students.map((s, idx) => (
-                    <tr key={s.id} className="border-b">
-                      <td className="py-3">{idx + 1}</td>
-                      <td className="py-3">{s.name}</td>
-                      <td className="py-3">{s.roll}</td>
-                      <td className="py-3">₹{(s.total || 0).toLocaleString()}</td>
-                      <td className="py-3">₹{(s.paid || 0).toLocaleString()}</td>
-                      <td className="py-3 text-red-600">₹{pendingAmount(s).toLocaleString()}</td>
-                      <td className="py-3">
-                        <div className="flex items-center gap-2">
+                  {students.map((s, idx) => {
+                    const form = forms[s.id] || { totalAmount: "", paidAmount: "", status: "unpaid" };
+                    const localTotal = Number(form.totalAmount || 0);
+                    const localPaid = Number(form.paidAmount || 0);
+                    return (
+                      <tr key={s.id} className="border-b">
+                        <td className="py-3">{idx + 1}</td>
+                        <td className="py-3">{s.name}</td>
+                        <td className="py-3">{s.rollNo}</td>
+                        <td className="py-3">
                           <input
                             type="number"
                             min="0"
-                            value={payments[s.id] ?? ""}
-                            onChange={(e) => setPayments((p) => ({ ...p, [s.id]: e.target.value }))}
-                            placeholder="Amount"
-                            className="border px-2 py-1 rounded w-28"
+                            value={form.totalAmount}
+                            onChange={(e) =>
+                              setForms((prev) => ({
+                                ...prev,
+                                [s.id]: { ...form, totalAmount: e.target.value },
+                              }))
+                            }
+                            disabled={!canEditFees}
+                            className="border px-2 py-1 rounded w-28 disabled:bg-gray-100"
                           />
-                          <button
-                            onClick={() => handlePay(s.id)}
-                            disabled={savingId === s.id}
-                            className="bg-blue-600 text-white px-3 py-1 rounded disabled:opacity-60"
+                        </td>
+                        <td className="py-3">
+                          <input
+                            type="number"
+                            min="0"
+                            value={form.paidAmount}
+                            onChange={(e) =>
+                              setForms((prev) => ({
+                                ...prev,
+                                [s.id]: { ...form, paidAmount: e.target.value },
+                              }))
+                            }
+                            disabled={!canEditFees}
+                            className="border px-2 py-1 rounded w-28 disabled:bg-gray-100"
+                          />
+                        </td>
+                        <td className="py-3 text-red-600">₹{Math.max(0, localTotal - localPaid).toLocaleString()}</td>
+                        <td className="py-3">
+                          <select
+                            value={form.status}
+                            onChange={(e) =>
+                              setForms((prev) => ({
+                                ...prev,
+                                [s.id]: { ...form, status: e.target.value },
+                              }))
+                            }
+                            disabled={!canEditFees}
+                            className="border px-2 py-1 rounded disabled:bg-gray-100"
                           >
-                            {savingId === s.id ? "Saving..." : "Pay"}
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
+                            <option value="paid">paid</option>
+                            <option value="partial">partial</option>
+                            <option value="unpaid">unpaid</option>
+                          </select>
+                        </td>
+                        {canEditFees && (
+                          <td className="py-3">
+                            <button
+                              onClick={() => handleSave(s.id)}
+                              disabled={savingId === s.id}
+                              className="bg-blue-600 text-white px-3 py-1 rounded disabled:opacity-60"
+                            >
+                              {savingId === s.id ? "Saving..." : "Save"}
+                            </button>
+                          </td>
+                        )}
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
           )}
 
+          {message && <div className="mt-4 text-green-600">{message}</div>}
           {error && <div className="mt-4 text-red-600">{error}</div>}
         </div>
       </div>

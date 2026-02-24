@@ -7,13 +7,13 @@ const {
   getMyChildAttendance,
 } = require("../controllers/attendanceController");
 
-// Teacher marks attendance
-router.post("/", auth(["teacher"]), markAttendance);
-
-// Admin / Teacher view attendance
-router.get("/:studentId", auth(["admin", "teacher"]), getAttendanceByStudent);
+// Teacher/Admin marks attendance
+router.post("/", auth(["teacher", "admin"]), markAttendance);
 
 // Parent views own child
 router.get("/parent/:studentId", auth(["parent"]), getMyChildAttendance);
+
+// Admin / Teacher view attendance
+router.get("/:studentId", auth(["admin", "teacher"]), getAttendanceByStudent);
 
 module.exports = router;

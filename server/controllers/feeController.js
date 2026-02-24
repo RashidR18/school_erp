@@ -1,9 +1,14 @@
 const Fee = require("../models/Fee");
-const Student = require("../models/Student");
+const { getAuthorizedChildForParent } = require("../utils/parentAccess");
 
 // ADMIN
 exports.setFee = async (req, res) => {
-  const fee = await Fee.create(req.body);
+  const { studentId, totalAmount, paidAmount, status } = req.body;
+  const fee = await Fee.findOneAndUpdate(
+    { studentId },
+    { studentId, totalAmount, paidAmount, status },
+    { upsert: true, new: true, setDefaultsOnInsert: true },
+  );
   res.json(fee);
 };
 
@@ -15,10 +20,7 @@ exports.getFeeByStudent = async (req, res) => {
 
 // PARENT
 exports.getMyChildFee = async (req, res) => {
-  const student = await Student.findOne({
-    _id: req.params.studentId,
-    parentId: req.user.id,
-  });
+  const student = await getAuthorizedChildForParent(req.user.id, req.params.studentId);
 
   if (!student) return res.sendStatus(403);
 
