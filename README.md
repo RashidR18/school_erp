@@ -96,31 +96,50 @@ school_erp/
 ⚙️ Installation & Setup
 
 1️⃣ Clone the Repository
-git clone https://github.com/your-username/school_erp.git
+
+git clone https://github.com/RashidR18/school_erp
+
 cd school_erp
+
 🖥️ Backend Setup
+
 cd backend
+
 npm install
+
 Create .env file in backend folder:
+
 PORT=5000
+
 MONGO_URI=your_mongodb_connection_string
+
 JWT_SECRET=your_secret_key
+
 Run Backend
+
 npm run dev
+
 
 Backend runs on:
 
 http://localhost:5000
 
+
 🌐 Frontend Setup
+
 cd frontend
+
 npm install
+
 npm run dev
+
 
 Frontend runs on:
 
 http://localhost:5173
+
 🔄 API Endpoints (Example)
+
 Auth Routes
 
 POST /api/auth/register
@@ -138,12 +157,20 @@ DELETE /api/users/:id
 (Add or modify according to your project routes)
 
 🧪 Environment Variables
+
 Backend (.env)
-PORT=
-MONGO_URI=
-JWT_SECRET=
+
+PORT=5000
+
+MONGO_URI=your_mongodb_connection_string
+
+JWT_SECRET=your_secret_key
+
 Frontend (.env)
+
 VITE_API_URL=http://localhost:5000
+
+
 📦 Deployment Guide
 
 Backend (Render)
@@ -169,6 +196,9 @@ Deploy
 👨‍💻 Author
 
 Rashid Ali
+
 MERN Stack Developer
+
 GitHub: https://github.com/RashidR18
+
 Portfolio: https://portfolio-frontend-iota-indol.vercel.app/
